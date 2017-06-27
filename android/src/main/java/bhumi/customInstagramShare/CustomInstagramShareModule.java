@@ -1,41 +1,22 @@
 package bhumi.customInstagramShare;
 
+import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.net.Uri;
+import android.provider.MediaStore;
+import android.util.Log;
+
 import com.facebook.react.bridge.ActivityEventListener;
 import com.facebook.react.bridge.BaseActivityEventListener;
 import com.facebook.react.bridge.Callback;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
-import com.facebook.react.uimanager.SimpleViewManager;
-import com.facebook.react.uimanager.ThemedReactContext;
-
-import android.app.Activity;
-import android.app.AlertDialog;
-import android.app.Dialog;
-import android.content.Context;
-import android.content.ContextWrapper;
-import android.content.DialogInterface;
-import android.content.Intent;
-import android.graphics.Point;
-import android.net.Uri;
-import android.os.AsyncTask;
-import android.util.Log;
-import android.view.Display;
-import android.view.View;
-import android.view.WindowManager;
-import android.webkit.WebChromeClient;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
-import android.widget.Toast;
-
-import org.json.JSONException;
-import org.json.JSONObject;
 
 import java.io.File;
-import java.net.URL;
-import java.util.Timer;
-import java.util.TimerTask;
-import android.content.pm.PackageManager;
 
 public class CustomInstagramShareModule extends ReactContextBaseJavaModule implements ActivityEventListener {
     private Activity mActivity;
@@ -43,6 +24,7 @@ public class CustomInstagramShareModule extends ReactContextBaseJavaModule imple
     private Callback callback;
 
     final int INSTAGRAM_SHARE_REQUEST = 500;
+
 
     public CustomInstagramShareModule(ReactApplicationContext reactContext, Activity activity) {
         super(reactContext);
@@ -72,31 +54,51 @@ public class CustomInstagramShareModule extends ReactContextBaseJavaModule imple
 
        String type = "image/*";
        String filename = mediaPath.substring(mediaPath.lastIndexOf("/")+1);
+        try {
+            if (isAppInstalled("com.instagram.android") == false) {
+                callback.invoke("Sorry,instagram is not installed in your device.");
+            } else {
+                Uri mediaUri = Uri.parse(mediaPath);
+                String realPath = getRealPathFromUri(reactContext, mediaUri);
+                File media = new File(realPath);
+                if (media.exists()) {
+                    // Create the new Intent using the 'Send' action.
+                    Intent share = new Intent(Intent.ACTION_SEND);
 
-       if(isAppInstalled("com.instagram.android") == false){
-         callback.invoke("Sorry,instagram is not installed in your device.");
-       }else{
-         File media = new File(mediaPath);
-          if(media.exists()){
-            // Create the new Intent using the 'Send' action.
-            Intent share = new Intent(Intent.ACTION_SEND);
+                    // Set the MIME type
+                    share.setType(type);
+                    share.setPackage("com.instagram.android");
 
-            // Set the MIME type
-            share.setType(type);
-            share.setPackage("com.instagram.android");
+                    //Create the URI from the media
+                    Uri uri = Uri.fromFile(media);
 
-            //Create the URI from the media
-            Uri uri = Uri.fromFile(media);
+                    // Add the URI to the Intent.
+                    share.putExtra(Intent.EXTRA_STREAM, uri);
 
-            // Add the URI to the Intent.
-            share.putExtra(Intent.EXTRA_STREAM, uri);
+                    // Broadcast the Intent.
+                    mActivity.startActivityForResult(Intent.createChooser(share, "Share to"), INSTAGRAM_SHARE_REQUEST);
+                } else {
+                    callback.invoke("Sorry,file does not exist on given path.");
+                }
+            }
+        } catch (Exception e) {
+            callback.invoke("Sorry, there was an error. Try again");
+        }
+    }
 
-            // Broadcast the Intent.
-            mActivity.startActivityForResult(Intent.createChooser(share, "Share to"),INSTAGRAM_SHARE_REQUEST);
-          } else{
-            callback.invoke("Sorry,file does not exist on given path.");
-          }
-       }
+    public static String getRealPathFromUri(Context context, Uri contentUri) {
+        Cursor cursor = null;
+        try {
+            String[] proj = { MediaStore.Images.Media.DATA };
+            cursor = context.getContentResolver().query(contentUri, proj, null, null, null);
+            int column_index = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
+            cursor.moveToFirst();
+            return cursor.getString(column_index);
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
+        }
     }
 
     @Override
